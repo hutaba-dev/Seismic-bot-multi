@@ -43,7 +43,7 @@ http://user1:pass1@proxy1.com:8080
 http://proxy2.com:8080
 ```
 
-> ⚠️ **SECURITY WARNING**: Never share your private key or commit the .env file to GitHub.
+> ⚠️ **SECURITY WARNING**: Never share your private key or commit the wallets.txt file to GitHub.
 
 ## Usage
 
