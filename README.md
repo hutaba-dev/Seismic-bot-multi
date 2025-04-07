@@ -31,13 +31,13 @@ npm install ethers solc dotenv readline crypto axios
 
 ## Configuration
 
-Create a `wallets.txt` file in the root directory with your private key per a line:
+Create a `wallets.txt` file in the root directory with your private keies per a line:
 
 ```
 your_private_key_here_1
 your_private_key_here_2
 ```
-Create a `proxies.txt` file in the root directory with your private key per a line:
+Create a `proxies.txt` file in the root directory with your proxies per a line:
 ```
 http://user1:pass1@proxy1.com:8080
 http://proxy2.com:8080
