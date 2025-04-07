@@ -23,7 +23,7 @@ A Node.js tool for deploying ERC-20 compatible tokens on the Seismic devnet and 
 git clone https://github.com/hutaba-dev/Seismic-bot-multi.git
 
 # Navigate to the project directory
-cd Seismic-Auto-Bot
+cd Seismic-bot-multi
 
 # Install dependencies
 npm install ethers solc dotenv readline crypto axios
