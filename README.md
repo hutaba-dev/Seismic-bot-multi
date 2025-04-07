@@ -1,4 +1,5 @@
-# Seismic Auto Bot - Airdrop Insiders
+# Seismic Auto Bot - Airdrop Insiders 
+# Forked by hutaba for multi wallets
 
 A Node.js tool for deploying ERC-20 compatible tokens on the Seismic devnet and automating token transfers to random addresses for testing and airdrop simulations.
 
@@ -25,15 +26,21 @@ git clone https://github.com/airdropinsiders/Seismic-Auto-Bot.git
 cd Seismic-Auto-Bot
 
 # Install dependencies
-npm install
+npm install ethers solc dotenv readline crypto axios
 ```
 
 ## Configuration
 
-Create a `.env` file in the root directory with your private key:
+Create a `wallets.txt` file in the root directory with your private key per a line:
 
 ```
-PRIVATE_KEY=your_private_key_here
+your_private_key_here_1
+your_private_key_here_2
+```
+Create a `proxies.txt` file in the root directory with your private key per a line:
+```
+http://user1:pass1@proxy1.com:8080
+http://proxy2.com:8080
 ```
 
 > ⚠️ **SECURITY WARNING**: Never share your private key or commit the .env file to GitHub.
@@ -72,11 +79,8 @@ The tool connects to:
 ## Contributors
 
 - Airdrop Insiders Team
+- Forked by Hutaba
 
 ## License
 
 MIT License
-
-## Support
-
-For any questions or support, please open an issue in this repository or contact the Airdrop Insiders team.
