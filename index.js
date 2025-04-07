@@ -26,7 +26,7 @@ pragma solidity ^0.8.13;
 contract SeismicToken {
     string public name;
     string public symbol;
-    uint8 public decimals = 18;
+    uint8 public decimals;
     uint256 public totalSupply;
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
@@ -34,9 +34,10 @@ contract SeismicToken {
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
-    constructor(string memory _name, string memory _symbol, uint256 _totalSupply) {
+    constructor(string memory _name, string memory _symbol, uint8 _decimals, uint256 _totalSupply) {
         name = _name;
         symbol = _symbol;
+        decimals = _decimals;
         totalSupply = _totalSupply * 10**uint256(decimals);
         balanceOf[msg.sender] = totalSupply;
         emit Transfer(address(0), msg.sender, totalSupply);
@@ -123,6 +124,22 @@ function generateRandomAddress() {
   const privateKey = "0x" + crypto.randomBytes(32).toString("hex");
   const wallet = new ethers.Wallet(privateKey);
   return { address: wallet.address, privateKey };
+}
+
+// 랜덤 토큰 정보 생성
+function generateTokenInfo(walletIndex) {
+  const baseName = "SeismicToken";
+  const baseSymbol = "STK";
+  const decimalsOptions = [6, 8, 18]; // 선택 가능한 소수점
+  const totalSupplyOptions = [1000, 10000, 1000000, 10000000]; // 선택 가능한 총 공급량
+
+  return {
+    name: `${baseName}${walletIndex + 1}`,
+    symbol: `${baseSymbol}${walletIndex + 1}`,
+    decimals: decimalsOptions[Math.floor(Math.random() * decimalsOptions.length)],
+    totalSupply:
+      totalSupplyOptions[Math.floor(Math.random() * totalSupplyOptions.length)],
+  };
 }
 
 function displaySection(title) {
@@ -229,50 +246,52 @@ async function initializeWallets(rpcUrl) {
 
   for (let i = 0; i < privateKeys.length; i++) {
     const privateKey = privateKeys[i];
-    const proxyUrl = proxies[i % proxies.length] || null; // 프록시 순환 사용
+    const proxyUrl = proxies[i % proxies.length] || null;
     const provider = createProviderWithProxy(rpcUrl, proxyUrl);
     const wallet = new ethers.Wallet(privateKey, provider);
     const balance = await wallet.getBalance();
+    const tokenInfo = generateTokenInfo(i); // 각 지갑에 고유 토큰 정보 생성
     wallets.push({
       wallet,
       address: wallet.address,
       balance: ethers.utils.formatEther(balance),
       proxy: proxyUrl || "None",
+      tokenInfo, // 토큰 정보 저장
     });
   }
 
   return wallets;
 }
 
-async function deployTokenContract(tokenName, tokenSymbol, totalSupply, wallets) {
+async function deployTokenContract(walletInfo) {
   try {
-    displaySection("DEPLOYING TOKEN CONTRACT");
-    console.log(`📝 Token Name: ${colors.yellow}${tokenName}${colors.reset}`);
-    console.log(`🔤 Token Symbol: ${colors.yellow}${tokenSymbol}${colors.reset}`);
+    const { name, symbol, decimals, totalSupply } = walletInfo.tokenInfo;
+
+    displaySection(`DEPLOYING TOKEN CONTRACT FOR ${walletInfo.address}`);
+    console.log(`📝 Token Name: ${colors.yellow}${name}${colors.reset}`);
+    console.log(`🔤 Token Symbol: ${colors.yellow}${symbol}${colors.reset}`);
+    console.log(`🔢 Decimals: ${colors.yellow}${decimals}${colors.reset}`);
     console.log(`💰 Total Supply: ${colors.yellow}${totalSupply}${colors.reset}`);
     console.log(
       `🌐 Network: ${colors.yellow}Seismic devnet (Chain ID: 5124)${colors.reset}`
     );
-
-    // 첫 번째 월렛으로 배포
-    const deployer = wallets[0];
     console.log(
-      `👛 Deployer: ${colors.yellow}${deployer.address}${colors.reset}`
+      `👛 Deployer: ${colors.yellow}${walletInfo.address}${colors.reset}`
     );
     console.log(
-      `💎 Wallet Balance: ${colors.yellow}${deployer.balance} ETH${colors.reset}`
+      `💎 Wallet Balance: ${colors.yellow}${walletInfo.balance} ETH${colors.reset}`
     );
     console.log(
-      `🌐 Proxy: ${colors.yellow}${deployer.proxy}${colors.reset}`
+      `🌐 Proxy: ${colors.yellow}${walletInfo.proxy}${colors.reset}`
     );
 
-    if (parseFloat(deployer.balance) === 0) {
+    if (parseFloat(walletInfo.balance) === 0) {
       throw new Error("Deployer wallet has no ETH for transaction fees.");
     }
 
     const contractPath = saveContractToFile(
       tokenContractSource,
-      "SeismicToken.sol"
+      `SeismicToken_${walletInfo.address}.sol`
     );
     console.log(
       `📄 Contract saved to: ${colors.yellow}${contractPath}${colors.reset}`
@@ -284,11 +303,11 @@ async function deployTokenContract(tokenName, tokenSymbol, totalSupply, wallets)
     const factory = new ethers.ContractFactory(
       abi,
       "0x" + bytecode,
-      deployer.wallet
+      walletInfo.wallet
     );
 
     console.log(`⏳ Initiating deployment...`);
-    const contract = await factory.deploy(tokenName, tokenSymbol, totalSupply, {
+    const contract = await factory.deploy(name, symbol, decimals, totalSupply, {
       gasLimit: 3000000,
     });
 
@@ -312,15 +331,15 @@ async function deployTokenContract(tokenName, tokenSymbol, totalSupply, wallets)
     return { contractAddress: contract.address, abi };
   } catch (error) {
     console.error(
-      `${colors.red}❌ Error deploying contract: ${error.message}${colors.reset}`
+      `${colors.red}❌ Error deploying contract for ${walletInfo.address}: ${error.message}${colors.reset}`
     );
     throw error;
   }
 }
 
-async function transferTokens(contractAddress, abi, numTransfers, amountPerTransfer, wallets) {
+async function transferTokens(walletInfo, contractAddress, abi, numTransfers, amountPerTransfer) {
   try {
-    displaySection("TRANSFERRING TOKENS");
+    displaySection(`TRANSFERRING TOKENS FROM ${walletInfo.address}`);
     console.log(
       `📊 Number of transfers: ${colors.yellow}${numTransfers}${colors.reset}`
     );
@@ -329,6 +348,12 @@ async function transferTokens(contractAddress, abi, numTransfers, amountPerTrans
     );
     console.log(
       `🎯 Contract address: ${colors.yellow}${contractAddress}${colors.reset}`
+    );
+
+    const tokenContract = new ethers.Contract(
+      contractAddress,
+      abi,
+      walletInfo.wallet
     );
 
     console.log(
@@ -351,21 +376,13 @@ async function transferTokens(contractAddress, abi, numTransfers, amountPerTrans
     );
 
     for (let i = 0; i < numTransfers; i++) {
-      // 랜덤 월렛 선택
-      const walletInfo = wallets[i % wallets.length];
-      const tokenContract = new ethers.Contract(
-        contractAddress,
-        abi,
-        walletInfo.wallet
-      );
       const recipient = generateRandomAddress();
       const formattedAmount = ethers.utils.parseUnits(
         amountPerTransfer.toString(),
-        18
+        walletInfo.tokenInfo.decimals
       );
 
       try {
-        // 잔액 체크
         const balance = await tokenContract.balanceOf(walletInfo.address);
         if (balance.lt(formattedAmount)) {
           throw new Error(`Insufficient token balance in ${walletInfo.address}`);
@@ -423,11 +440,11 @@ async function transferTokens(contractAddress, abi, numTransfers, amountPerTrans
         colors.reset
     );
     console.log(
-      `\n${colors.green}✅ Transfer operations completed${colors.reset}`
+      `\n${colors.green}✅ Transfer operations completed for ${walletInfo.address}${colors.reset}`
     );
   } catch (error) {
     console.error(
-      `${colors.red}❌ Error transferring tokens: ${error.message}${colors.reset}`
+      `${colors.red}❌ Error transferring tokens from ${walletInfo.address}: ${error.message}${colors.reset}`
     );
     throw error;
   }
@@ -444,7 +461,7 @@ async function main() {
   console.log(
     colors.cyan +
       colors.bright +
-      "       SEISMIC TOKEN AUTO BOT - AIRDROP INSIDERS           " +
+      "       SEISMIC TOKEN AUTO BOT - MULTI-WALLET DEPLOYMENT    " +
       colors.reset
   );
   console.log(
@@ -469,104 +486,86 @@ async function main() {
       console.log(
         `  Wallet ${index + 1}: ${colors.yellow}${w.address}${colors.reset}, Balance: ${colors.yellow}${w.balance} ETH${colors.reset}, Proxy: ${colors.yellow}${w.proxy}${colors.reset}`
       );
+      console.log(
+        `    Token Info - Name: ${w.tokenInfo.name}, Symbol: ${w.tokenInfo.symbol}, Decimals: ${w.tokenInfo.decimals}, Total Supply: ${w.tokenInfo.totalSupply}`
+      );
     });
 
-    rl.question(
-      `\n${colors.yellow}📝 Enter token name: ${colors.reset}`,
-      (name) => {
-        rl.question(
-          `${colors.yellow}🔤 Enter token symbol: ${colors.reset}`,
-          (symbol) => {
-            rl.question(
-              `${colors.yellow}💰 Enter total supply: ${colors.reset}`,
-              async (supply) => {
-                if (!name || !symbol || !supply) {
-                  console.error(
-                    `${colors.red}❌ All fields are required!${colors.reset}`
-                  );
-                  rl.close();
-                  return;
-                }
-
-                try {
-                  const totalSupply = parseInt(supply);
-                  if (isNaN(totalSupply) || totalSupply <= 0) {
-                    throw new Error("Total supply must be a positive number");
-                  }
-
-                  const { contractAddress, abi } = await deployTokenContract(
-                    name,
-                    symbol,
-                    totalSupply,
-                    wallets
-                  );
-
-                  rl.question(
-                    `\n${colors.yellow}🔄 Do you want to transfer tokens to random addresses? (y/n): ${colors.reset}`,
-                    (transferChoice) => {
-                      if (transferChoice.toLowerCase() === "y") {
-                        rl.question(
-                          `${colors.yellow}📊 Enter number of transfers to perform: ${colors.reset}`,
-                          (numTransfers) => {
-                            rl.question(
-                              `${colors.yellow}💸 Enter amount per transfer: ${colors.reset}`,
-                              async (amountPerTransfer) => {
-                                try {
-                                  const transfers = parseInt(numTransfers);
-                                  const amount = parseFloat(amountPerTransfer);
-
-                                  if (isNaN(transfers) || transfers <= 0) {
-                                    throw new Error(
-                                      "Number of transfers must be a positive number"
-                                    );
-                                  }
-
-                                  if (isNaN(amount) || amount <= 0) {
-                                    throw new Error(
-                                      "Amount must be a positive number"
-                                    );
-                                  }
-
-                                  await transferTokens(
-                                    contractAddress,
-                                    abi,
-                                    transfers,
-                                    amount,
-                                    wallets
-                                  );
-
-                                  console.log(
-                                    `\n${colors.green}🎉 All operations completed successfully!${colors.reset}`
-                                  );
-                                } catch (error) {
-                                  console.error(
-                                    `${colors.red}❌ Error: ${error.message}${colors.reset}`
-                                  );
-                                } finally {
-                                  rl.close();
-                                }
-                              }
-                            );
-                          }
-                        );
-                      } else {
-                        console.log(
-                          `\n${colors.green}🎉 Token deployment completed successfully!${colors.reset}`
-                        );
-                        rl.close();
-                      }
-                    }
-                  );
-                } catch (error) {
-                  console.error(
-                    `${colors.red}❌ Error: ${error.message}${colors.reset}`
-                  );
-                  rl.close();
-                }
-              }
-            );
-          }
+    // 모든 지갑에 대해 토큰 배포
+    const deployedTokens = [];
+    for (const walletInfo of wallets) {
+      try {
+        const { contractAddress, abi } = await deployTokenContract(walletInfo);
+        deployedTokens.push({
+          walletInfo,
+          contractAddress,
+          abi,
+        });
+      } catch (error) {
+        console.error(
+          `${colors.red}❌ Skipping wallet ${walletInfo.address} due to deployment error${colors.reset}`
         );
+      }
+    }
+
+    if (deployedTokens.length === 0) {
+      throw new Error("No tokens were successfully deployed.");
+    }
+
+    rl.question(
+      `\n${colors.yellow}🔄 Do you want to transfer tokens from each wallet to random addresses? (y/n): ${colors.reset}`,
+      async (transferChoice) => {
+        if (transferChoice.toLowerCase() === "y") {
+          rl.question(
+            `${colors.yellow}📊 Enter number of transfers per wallet: ${colors.reset}`,
+            (numTransfers) => {
+              rl.question(
+                `${colors.yellow}💸 Enter amount per transfer: ${colors.reset}`,
+                async (amountPerTransfer) => {
+                  try {
+                    const transfers = parseInt(numTransfers);
+                    const amount = parseFloat(amountPerTransfer);
+
+                    if (isNaN(transfers) || transfers <= 0) {
+                      throw new Error(
+                        "Number of transfers must be a positive number"
+                      );
+                    }
+                    if (isNaN(amount) || amount <= 0) {
+                      throw new Error("Amount must be a positive number");
+                    }
+
+                    // 각 지갑별 토큰 전송
+                    for (const { walletInfo, contractAddress, abi } of deployedTokens) {
+                      await transferTokens(
+                        walletInfo,
+                        contractAddress,
+                        abi,
+                        transfers,
+                        amount
+                      );
+                    }
+
+                    console.log(
+                      `\n${colors.green}🎉 All operations completed successfully!${colors.reset}`
+                    );
+                  } catch (error) {
+                    console.error(
+                      `${colors.red}❌ Error: ${error.message}${colors.reset}`
+                    );
+                  } finally {
+                    rl.close();
+                  }
+                }
+              );
+            }
+          );
+        } else {
+          console.log(
+            `\n${colors.green}🎉 Token deployment completed for all wallets!${colors.reset}`
+          );
+          rl.close();
+        }
       }
     );
   } catch (error) {
