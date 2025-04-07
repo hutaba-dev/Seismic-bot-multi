@@ -55,7 +55,7 @@ node index.js
 
 The interactive CLI will guide you through:
 
-1. Token creation (name, symbol, total supply)
+1. Random full automatic Token creation (name, symbol, total supply)
 2. Token deployment to Seismic devnet
 3. Optional: Automated token transfers to random addresses
 
